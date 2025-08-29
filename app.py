@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 import string
 import random
+import logging
 
 from flask import Flask, render_template_string, request, redirect, url_for, session
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -107,78 +108,96 @@ def create_app() -> Flask:
 	# CloudWatch state
 	cw_client = None
 	cw_next_token = None
-
-	def ensure_cloudwatch_client():
-		nonlocal cw_client, cw_next_token
-		if not AWS_LOGS_ENABLE or boto3 is None:
-			return None
-		if cw_client is None:
-			cw_client = boto3.client("logs", region_name=AWS_REGION)
-
-			# Ensure group/stream exists
-			try:
-				cw_client.create_log_group(logGroupName=AWS_LOG_GROUP)
-			except ClientError as e: # Throws an exception if log group already exists
-				if e.response.get('Error', {}).get('Code') != 'ResourceAlreadyExistsException':
-					raise
-
-			try:
-				cw_client.create_log_stream(logGroupName=AWS_LOG_GROUP, logStreamName=AWS_LOG_STREAM)
-			except ClientError as e: # Throws another exception of log stream already exists
-				if e.response.get('Error', {}).get('Code') != 'ResourceAlreadyExistsException':
-					raise
-
-			# Fetch current sequence token
-			try:
-				resp = cw_client.describe_log_streams(
-					logGroupName=AWS_LOG_GROUP,
-					logStreamNamePrefix=AWS_LOG_STREAM,
-					limit=1,
-				)
-				streams = resp.get('logStreams', [])
-				if streams:
-					cw_next_token = streams[0].get('uploadSequenceToken')
-			except ClientError:
-				pass
-
-		return cw_client
-
+	
+	def get_cw_client():
+	    """Initialize CloudWatch client and ensure log group/stream exist."""
+	    global cw_client, cw_next_token
+	
+	    if not AWS_LOGS_ENABLE or boto3 is None:
+	        return None
+	
+	    if cw_client is None:
+	        cw_client = boto3.client("logs", region_name=AWS_REGION)
+	        # Ensure log group exists
+	        try:
+	            cw_client.create_log_group(logGroupName=AWS_LOG_GROUP)
+	        except ClientError as e:
+	            if e.response["Error"]["Code"] != "ResourceAlreadyExistsException":
+	                logging.error(f"CloudWatch log group error: {e}")
+	                return None
+	        # Ensure log stream exists
+	        try:
+	            cw_client.create_log_stream(logGroupName=AWS_LOG_GROUP, logStreamName=AWS_LOG_STREAM)
+	        except ClientError as e:
+	            if e.response["Error"]["Code"] != "ResourceAlreadyExistsException":
+	                logging.error(f"CloudWatch log stream error: {e}")
+	                return None
+	
+	        # Fetch current sequence token
+	        try:
+	            resp = cw_client.describe_log_streams(
+	                logGroupName=AWS_LOG_GROUP,
+	                logStreamNamePrefix=AWS_LOG_STREAM,
+	                limit=1
+	            )
+	            streams = resp.get("logStreams", [])
+	            if streams:
+	                cw_next_token = streams[0].get("uploadSequenceToken")
+	        except Exception as e:
+	            logging.warning(f"Could not get sequence token: {e}")
+	
+	    return cw_client
+	
+	
 	def send_to_cloudwatch(entry: dict):
-		nonlocal cw_next_token
-		if not AWS_LOGS_ENABLE or boto3 is None:
-			return
-		client = ensure_cloudwatch_client()
-		if client is None:
-			return
-		event = {
-			'timestamp': int(datetime.now(tz=timezone.utc).timestamp() * 1000),
-			'message': json.dumps(entry, separators=(",", ":")),
-		}
-		kwargs = dict(logGroupName=AWS_LOG_GROUP, logStreamName=AWS_LOG_STREAM, logEvents=[event])
-		if cw_next_token:
-			kwargs['sequenceToken'] = cw_next_token
+	    """Send a single log entry to CloudWatch, auto-handling sequence token errors."""
+	    global cw_next_token
+	
+	    if not AWS_LOGS_ENABLE or boto3 is None:
+	        return
+	
+	    client = get_cw_client()
+	    if client is None:
+	        return
+	
+	    event = {
+	        "timestamp": int(datetime.now(tz=timezone.utc).timestamp() * 1000),
+	        "message": json.dumps(entry, separators=(",", ":"))
+	    }
+	    kwargs = {
+	        "logGroupName": AWS_LOG_GROUP,
+	        "logStreamName": AWS_LOG_STREAM,
+	        "logEvents": [event]
+	    }
+	    if cw_next_token:
+	        kwargs["sequenceToken"] = cw_next_token
+	
+	    try:
+	        resp = client.put_log_events(**kwargs)
+	        cw_next_token = resp.get("nextSequenceToken")
+	    except ClientError as e:
+	        code = e.response.get("Error", {}).get("Code")
+	        if code in ("InvalidSequenceTokenException", "DataAlreadyAcceptedException"):
+	            # Refresh token and retry once
+	            try:
+	                resp = client.describe_log_streams(
+	                    logGroupName=AWS_LOG_GROUP,
+	                    logStreamNamePrefix=AWS_LOG_STREAM,
+	                    limit=1
+	                )
+	                streams = resp.get("logStreams", [])
+	                if streams:
+	                    cw_next_token = streams[0].get("uploadSequenceToken")
+	                    kwargs["sequenceToken"] = cw_next_token
+	                    resp = client.put_log_events(**kwargs)
+	                    cw_next_token = resp.get("nextSequenceToken")
+	            except Exception as e2:
+	                logging.error(f"CloudWatch retry failed: {e2}")
+	        else:
+	            logging.error(f"CloudWatch put_log_events error: {e}")
+	    except Exception as e:
+	        logging.error(f"CloudWatch unknown error: {e}")
 
-		try:
-			resp = client.put_log_events(**kwargs)
-			cw_next_token = resp.get('nextSequenceToken')
-		except ClientError as e:
-			code = e.response.get('Error',{}).get('Code')
-			if code in ("InvalidSequenceTokenException", "DataAlreadyAcceptedException"):
-				# Refresh token and retry only once
-				try:
-					r = client.describe_log_streams(logGroupName=AWS_LOG_GROUP, logStreamNamePrefix=AWS_LOG_STREAM, limit=1)
-					streams = r.get('logStreams', [])
-					if streams:
-						cw_next_token = streams[0].get('uploadSequenceToken')
-					kwargs['sequenceToken'] = cw_next_token
-					resp = client.put_log_events(**kwargs)
-					cw_next_token = resp.get('nextSequenceToken')
-				except Exception:
-					pass
-
-			# Swallow other errors to avoid breaking user flow
-		except Exception:
-			pass
 
 	# Append one-line JSON to NDJSON file (atomic-ish append)
 	def append_ndjson(entry: dict):
@@ -194,26 +213,26 @@ def create_app() -> Flask:
 	app._entry_counter = 0
 
 	def log_request_secure(req):
-		app._entry_counter += 1
-		entry = {
-			"entry_number": app._entry_counter,
-			"timestamp": datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z"),
-			"user-agent": req.headers.get("User-Agent", ""),
-			# After ProxyFix, request.remote_addr is the real client IP when behind nginx
-			"ip": req.remote_addr or "",
-			"id": uuid4().hex, # Differs from "entry_number" in the fact that this should be persistent event between resets
-		}
-
-		# Only keep required fields in storage to match your schema
-		minimal = {k: entry[k] for k in ("entry_number", "timestamp", "user-agent", "ip")}
-		append_ndjson(minimal)
-		# Optionally mirror to CloudWatch
-		try:
-			send_to_cloudwatch(minimal)
-		except Exception:
-			pass
-
-		return minimal
+	    """Log a request locally and optionally to CloudWatch."""
+	    app._entry_counter += 1
+	    entry = {
+	        "entry_number": app._entry_counter,
+	        "timestamp": datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z"),
+	        "user-agent": req.headers.get("User-Agent", ""),
+	        "ip": req.remote_addr or "",
+	        "id": uuid4().hex
+	    }
+	
+	    # Write to local NDJSON file
+	    append_ndjson({k: entry[k] for k in ("entry_number", "timestamp", "user-agent", "ip")})
+	
+	    # Send to CloudWatch asynchronously
+	    try:
+	        send_to_cloudwatch({k: entry[k] for k in ("entry_number", "timestamp", "user-agent", "ip")})
+	    except Exception as e:
+	        logging.warning(f"Failed to send to CloudWatch: {e}")
+	
+	    return entry
 
 # ----------------------------------
 # Routes
