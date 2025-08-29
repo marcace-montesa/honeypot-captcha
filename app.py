@@ -40,7 +40,7 @@ except Exception:
 LOG_PATH = os.environ.get("HP_LOG_PATH", "/var/log/honeypot/honeypot.ndjson")
 
 AWS_LOGS_ENABLE = os.environ.get("HP_AWS_LOGS_ENABLE", "false").lower() == "true"
-AWS_REGION = os.environ.get("AWS_REGION", "us-west-2")
+AWS_REGION = os.environ.get("AWS_REGION", "us-west-1")
 AWS_LOG_GROUP = os.environ.get("HP_AWS_LOG_GROUP", "honeypot-captcha")
 AWS_LOG_STREAM = os.environ.get("HP_AWS_LOG_STREAM", "requests")
 
