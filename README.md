@@ -31,11 +31,11 @@ It can be used to:
 ## Usage
 
 # 1. Clone the repository
-git clone https://github.com/MarcAce-Montesa/Honeypot-Captcha.git
+git clone https://github.com/MarcAce-Montesa/Honeypot-Captcha.git\
 cd Honeypot-Captcha
 
 # 2. Create and activate a Python virtual environment
-python3 -m venv venv
+python3 -m venv venv\
 source venv/bin/activate
 
 # 3. Install dependencies
