@@ -256,43 +256,34 @@ def create_app() -> Flask:
 
 	@app.get("/")
 	def index():
-		return render_template_string(INDEX_HTML)
-
-	if limiter:
-		@app.route("/captcha", methods=["GET", "POST"])
-		@limiter.limit("10 per minute")
-		def captcha():
-			if request.method == "POST":
-				answer = (request.form.get("captcha_input", "").strip()).upper()
-				expected = session.get("captcha_text", "")
-				if answer == expected:
-					log_request_secure(request)
-					return redirect(url_for("success"))
-
-				# If given the wrong answer it will generate a new challenge
-				new_captcha = generate_captcha()
-				session["captcha_text"] = new_captcha
-				return render_template_string(CAPTCHA_HTML, captcha=new_captcha, error=True)
-
-				# GET will make a new challenge
-				captcha_text = generate_captcha()
-				session["captcha_text"] = captcha_text
-				return render_template_string(CAPTCHA_HTML, captcha=captcha_text, error=False)
-	else:
-		@app.route("/captcha", methods=["GET", "POST"])
-		def captcha():
-			if request.method == "POST":
-				answer = (request.form.get("captcha_input", "").strip()).upper()
-				expected = session.get("captcha_text", "")
-				if answer == expected:
-					log_request_secure(request)
-					return redirect(url_for("success"))
-				new_captcha = generate_captcha()
-				session["captcha_text"] = new_captcha
-				return render_template_string(CAPTCHA_HTML, captcha=new_captcha, error=True)
-			captcha_text = generate_captcha()
-			session["captcha_text"] = captcha_text
-			return render_template_string(CAPTCHA_HTML, captcha=captcha_text, error=False)
+	    return render_template_string(INDEX_HTML)
+	
+	
+	def register_captcha_route(app, limiter_enabled=False, limiter=None):
+	    route_decorator = limiter.limit("10 per minute") if limiter_enabled and limiter else lambda f: f
+	
+	    @app.route("/captcha", methods=["GET", "POST"])
+	    @route_decorator
+	    def captcha():
+	        if request.method == "POST":
+	            answer = (request.form.get("captcha_input", "").strip()).upper()
+	            expected = session.get("captcha_text", "")
+	            if answer == expected:
+	                log_request_secure(request)
+	                return redirect(url_for("success"))
+	            # Wrong answer → generate new captcha and show error
+	            new_captcha = generate_captcha()
+	            session["captcha_text"] = new_captcha
+	            return render_template_string(CAPTCHA_HTML, captcha=new_captcha, error=True)
+	
+	        # GET request → generate new captcha
+	        captcha_text = generate_captcha()
+	        session["captcha_text"] = captcha_text
+	        return render_template_string(CAPTCHA_HTML, captcha=captcha_text, error=False)
+	
+	
+	# Call the function to register the route
+	register_captcha_route(app, limiter_enabled=bool(limiter), limiter=limiter)
 
 	@app.get("/success")
 	def success():
