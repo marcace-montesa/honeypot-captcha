@@ -2,7 +2,7 @@
 # Honeypot CAPTCHA program
 # The purpose of this application is a proof-of-concept spite machine to create a log of users on a validation website
 # This is not intended for public use, it's purely for educational/demo purposes
-# Intended to be deployed on an AWS EC2 instance that can be (eventually) connected to CloudTrail
+# Intended to be deployed on an AWS EC2 instance that can be connected to CloudWatch
 # ----------------------------------
 
 import json
