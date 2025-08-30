@@ -3,6 +3,12 @@
 A proof-of-concept **honeypot CAPTCHA** web application built with Flask.
 It logs request data (IP, User-Agent, timestamp) both locally (as NDJSON) and optionally to AWS CloudWatch Logs.
 
+The purpose of this application is to demonstrate the following security concepts:
+* Implementation and utilization of simple CAPTCHA on a webpage.
+* Ability to record client information and secure log storage.
+* Demonstration of secure coding practices. (Preventative measures against hardcoded secrets, injection attacks, and the implementation of rate limiting).
+* Configuration of AWS IAM roles, EC2 Security Groups, and CloudWatch logs.
+
 **Disclaimer:** This project is for educational/demo purposes only. It should not be used as a production CAPTCHA solution.
 
 ---
@@ -195,3 +201,9 @@ Now the app will automatically start on reboot.
 
 * Local logs: `/var/log/honeypot/honeypot.ndjson`
 * CloudWatch Logs (if enabled): `honeypot-captcha/requests`
+
+---
+
+## Known Issues
+* The CloudWatch logs don't update their entry number field correctly, will work out why later. I'll probably have some secondary or auxiliary program to parse through these logs and sort them for ingestion, but it's not a high priority at the moment.
+* There are some IPv4 issues when connecting via a web browser. Or it could be HTTPS/HSTS issues. Regardless, my solution was to just register it onto a public domain with proper security headers and certifications. It shouldn't be an issue if you're running it locally.
