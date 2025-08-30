@@ -28,15 +28,15 @@ The purpose of this application is to demonstrate the following security concept
 * Python 3.9+
 * Dependencies listed in `requirements.txt`:
 
-  ```txt
-  Flask==3.0.3  
-  Werkzeug==3.0.3  
-  flask-limiter==3.8.0  
-  flask-talisman==1.1.0  
-  boto3==1.34.162  
-  botocore==1.34.162  
-  python-dotenv==1.0.1
-  ```
+```txt
+Flask==3.0.3  
+Werkzeug==3.0.3  
+flask-limiter==3.8.0  
+flask-talisman==1.1.0  
+boto3==1.34.162  
+botocore==1.34.162  
+python-dotenv==1.0.1
+```
 
 Install dependencies:
 
