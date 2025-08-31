@@ -78,11 +78,12 @@ def create_app() -> Flask:
 		Talisman(app, content_security_policy=csp, force_https=True)
 	
 	# Rate limiting the site to reduce bot abuse...
-	# ...Ironically, the whole purpose of the site is supposed to be a CAPTCHA to avoid this, but without using Google's reCAPTCHA or other advance CAPTCHA service, it kinda defeats the purpose?
+	# ...Ironically, the whole original purpose of the site is supposed to be a CAPTCHA to avoid this, but without using Google's reCAPTCHA or other advance CAPTCHA service, it kinda defeats the purpose?
 	# Like, surely a more advanced bot or AI algo can solve this captcha pretty easily
 	# It's not even security through obscurity at this point, but like security theater ¯\_(ツ)_/¯
 	# Idk, tl;dr: don't rely on this app as a full on CAPTCHA service for your applications, it's only a demo LOL
-	# But anyways, the rate limit is set to 60 requests per minute, it technically can be adjusted in line [SOMETHING FOR LATER], but I set it to this because surely no human is solving a CAPTCHA a second right
+	# But anyways, the rate limit is set to 60 requests per minute, it technically can be adjusted in line [SOMETHING FOR LATER LOL]
+	# But I set it to this because surely no human is solving a CAPTCHA a second right
 
 	if Limiter:
 		limiter = Limiter(get_remote_address, app=app,
@@ -118,6 +119,7 @@ def create_app() -> Flask:
 	
 	    if cw_client is None:
 	        cw_client = boto3.client("logs", region_name=AWS_REGION)
+
 	        # Ensure log group exists
 	        try:
 	            cw_client.create_log_group(logGroupName=AWS_LOG_GROUP)
@@ -125,6 +127,7 @@ def create_app() -> Flask:
 	            if e.response["Error"]["Code"] != "ResourceAlreadyExistsException":
 	                logging.error(f"CloudWatch log group error: {e}")
 	                return None
+
 	        # Ensure log stream exists
 	        try:
 	            cw_client.create_log_stream(logGroupName=AWS_LOG_GROUP, logStreamName=AWS_LOG_STREAM)
@@ -148,7 +151,6 @@ def create_app() -> Flask:
 	
 	    return cw_client
 	
-	
 	def send_to_cloudwatch(entry: dict):
 	    """Send a single log entry to CloudWatch, auto-handling sequence token errors."""
 	    global cw_next_token
@@ -164,11 +166,13 @@ def create_app() -> Flask:
 	        "timestamp": int(datetime.now(tz=timezone.utc).timestamp() * 1000),
 	        "message": json.dumps(entry, separators=(",", ":"))
 	    }
+
 	    kwargs = {
 	        "logGroupName": AWS_LOG_GROUP,
 	        "logStreamName": AWS_LOG_STREAM,
 	        "logEvents": [event]
 	    }
+
 	    if cw_next_token:
 	        kwargs["sequenceToken"] = cw_next_token
 	
