@@ -6,8 +6,8 @@ It logs request data (IP, User-Agent, timestamp) both locally (as NDJSON) and op
 The purpose of this application is to demonstrate the following security concepts:
 * Implementation and utilization of simple CAPTCHA on a webpage.
 * Ability to record client information and secure log storage.
-* Demonstration of secure coding practices. (Preventative measures against hardcoded secrets, injection attacks, and the implementation of rate limiting).
-* Configuration of AWS IAM roles, EC2 Security Groups, and CloudWatch logs.
+* Demonstration of secure coding practices. (Including: preventative measures against hardcoded secrets, injection attacks, and the implementation of rate limiting).
+* Configuration of AWS IAM roles, network security groups, and CloudWatch logs.
 
 **Disclaimer:** This project is for educational/demo purposes only. It should not be used as a production CAPTCHA solution.
 
